@@ -499,6 +499,7 @@ export interface Finding {
   name?: string; // 漏洞名称;为空时展示回退到 vulnclass
   severity: Severity;
   status: FindingStatus;
+  verify_status?: string; // 确定性验证层结论:unverified | verifying | verified | rejected | inconclusive
   summary: string;
   evidence: string;
   report?: string; // 详细报告(Markdown);仅详情接口返回,列表为空
@@ -518,6 +519,7 @@ export interface FindingsPage {
   total: number;
   page: number;
   page_size: number;
+  validator_online?: boolean; // 验证服务是否在线;离线时 verify 筛选降级为展示全部
 }
 
 export interface FindingGroup {
@@ -581,6 +583,9 @@ export interface FindingQuery {
   sort?: "severity" | "time";
   // 资产树节点 key;选中一个节点 = 选中它的整棵子树。空 = 不按资产筛选。
   assetScope?: string;
+  // 确定性验证层筛选:verified | rejected | inconclusive | unverified |
+  // verifying | reviewable(=verified/inconclusive,默认) | all(不过滤)。
+  verify?: string;
 }
 
 // ---- Findings by asset (资产视图) ----
