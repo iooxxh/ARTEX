@@ -1105,6 +1105,11 @@ ALTER TABLE findings ADD COLUMN IF NOT EXISTS report TEXT NOT NULL DEFAULT '';
 CREATE INDEX IF NOT EXISTS idx_findings_task ON findings(task_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_findings_time ON findings(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_findings_status ON findings(status, created_at DESC);
+-- 确定性验证层(Phase 3):验证服务对 finding 的判定结论。
+-- unverified 未提交验证 / verifying 验证中 / verified 验证通过 /
+-- rejected 验证不通过 / inconclusive 无法判定。由 agent/validator_hook.go 异步回写。
+ALTER TABLE findings ADD COLUMN IF NOT EXISTS verify_status TEXT NOT NULL DEFAULT 'unverified';
+CREATE INDEX IF NOT EXISTS idx_findings_verify_status ON findings(verify_status, created_at DESC);
 -- 「按资产」视图靠 asset_ids @> '[<id>]' 反查发现,没有这个 GIN 索引就是全表扫。
 CREATE INDEX IF NOT EXISTS idx_findings_asset_ids ON findings USING GIN(asset_ids jsonb_path_ops);
 
