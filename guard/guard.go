@@ -54,6 +54,12 @@ func newGuard(ic *intercept.Interceptor) *Guard {
 // Hooks returns the hook registry to attach to an agent session.
 func (g *Guard) Hooks() *hook.Registry { return g.reg }
 
+// On registers an additional hook on the guard's registry (e.g. the
+// deterministic-validation forwarder in agent/validator_hook.go). It must be
+// called once per Guard instance, at creation time — registering per intent
+// would stack duplicates.
+func (g *Guard) On(t hook.EventType, f hook.Func) { g.reg.On(t, f) }
+
 func (g *Guard) preToolUse(ctx context.Context, ev hook.Event) hook.Result {
 	// Extract the shell-command surface for the audit log: Bash + the interactive-shell
 	// tools (shell_open's command, shell_send's text). Destructive/exfil gating is no

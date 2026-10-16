@@ -32,6 +32,9 @@ func findingFilterFromQuery(q url.Values) db.FindingFilter {
 		Severity:  normFilter(q.Get("severity")),
 		Status:    normFilter(q.Get("status")),
 		VulnClass: normFilter(q.Get("vulnclass")),
+		// verify: verified | rejected | inconclusive | unverified | verifying |
+		// reviewable(=verified/inconclusive)；all/空 = 不筛选。
+		VerifyStatus: normFilter(q.Get("verify")),
 		// task_id(独立于会切到「按任务节点」分支的 task 参数):全局表按任务筛选。
 		TaskID:     normFilter(q.Get("task_id")),
 		Query:      q.Get("q"),
