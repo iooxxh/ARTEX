@@ -132,6 +132,9 @@ export default function FindingsPage() {
   const [view, setView] = React.useState<FindingView>("flat");
   const [severity, setSeverity] = React.useState<"all" | Severity>("all");
   const [status, setStatus] = React.useState<"all" | FindingStatus>("all");
+  // 确定性验证层筛选:默认 reviewable(verified/inconclusive),人工复核队列只看已验证的。
+  const [verify, setVerify] = React.useState<string>("reviewable");
+  const [validatorOnline, setValidatorOnline] = React.useState(true);
   const [vulnclass, setVulnclass] = React.useState<string>("all");
   const [task, setTask] = React.useState<string>("all");
   const [sort, setSort] = React.useState<"severity" | "time">("severity");
@@ -162,7 +165,7 @@ export default function FindingsPage() {
   const retestRefreshVersion = React.useRef(0);
   const [deepenDescription, setDeepenDescription] = React.useState("");
   const [deepening, setDeepening] = React.useState(false);
-  const filterFingerprint = JSON.stringify([severity, status, vulnclass, task, sort, query]);
+  const filterFingerprint = JSON.stringify([severity, status, vulnclass, task, sort, query, verify]);
   const activeFilterFingerprint = React.useRef(filterFingerprint);
   activeFilterFingerprint.current = filterFingerprint;
 
@@ -203,6 +206,7 @@ export default function FindingsPage() {
           vulnclass?: unknown;
           task?: unknown;
           sort?: unknown;
+          verify?: unknown;
         };
         if (FINDING_VIEWS.includes(parsed.view as FindingView)) setView(parsed.view as FindingView);
         if (parsed.severity === "all" || SEVERITIES.includes(parsed.severity as Severity)) {
@@ -214,6 +218,7 @@ export default function FindingsPage() {
         if (typeof parsed.vulnclass === "string" && parsed.vulnclass) setVulnclass(parsed.vulnclass);
         if (typeof parsed.task === "string" && parsed.task) setTask(parsed.task);
         if (parsed.sort === "severity" || parsed.sort === "time") setSort(parsed.sort);
+        if (typeof parsed.verify === "string" && parsed.verify) setVerify(parsed.verify);
       } catch {
         // Ignore malformed or legacy preferences and retain the defaults.
       }
@@ -225,9 +230,9 @@ export default function FindingsPage() {
     if (!preferencesHydrated) return;
     setLocalStorageValue(
       FINDING_LIST_PREFERENCE_KEY,
-      JSON.stringify({ view, severity, status, vulnclass, task, sort }),
+      JSON.stringify({ view, severity, status, vulnclass, task, sort, verify }),
     );
-  }, [preferencesHydrated, severity, sort, status, task, view, vulnclass]);
+  }, [preferencesHydrated, severity, sort, status, task, view, vulnclass, verify]);
 
   React.useEffect(() => {
     const timer = window.setTimeout(() => setQuery(search.trim()), 300);
@@ -286,7 +291,7 @@ export default function FindingsPage() {
       await api.exportFindings({
         format: exportFormat,
         scope: exportScope,
-        filters: { severity, status, vulnclass, task, query, sort },
+        filters: { severity, status, vulnclass, task, query, sort, verify },
         ids: [...selectedIds],
       });
       setExportOpen(false);
@@ -331,15 +336,17 @@ export default function FindingsPage() {
         query,
         sort,
         assetScope: activeAssetScope ?? undefined,
+        verify,
       });
       if (request !== flatRequest.current || activeFilterFingerprint.current !== requestFilter) return;
       setFlat({ items: result.items, total: result.total, loaded: true, loading: false });
+      if (typeof result.validator_online === "boolean") setValidatorOnline(result.validator_online);
     } catch {
       if (request !== flatRequest.current || activeFilterFingerprint.current !== requestFilter) return;
       // Polling keeps the last successful snapshot visible.
       setFlat((current) => ({ ...current, loading: false }));
     }
-  }, [activeAssetScope, filterFingerprint, flatPage, flatPageSize, severity, status, vulnclass, task, query, sort]);
+  }, [activeAssetScope, filterFingerprint, flatPage, flatPageSize, severity, status, vulnclass, task, query, sort, verify]);
 
   // loadAssetTree 取整棵资产树。树不随选中节点变化(否则选一下就塌成一条链),
   // 所以这里不带 assetScope。
@@ -349,7 +356,7 @@ export default function FindingsPage() {
     const request = ++assetTreeRequest.current;
     setAssetTree((current) => ({ ...current, loading: true }));
     try {
-      const result = await api.findingAssetTree({ severity, status, vulnclass, task, query, sort });
+      const result = await api.findingAssetTree({ severity, status, vulnclass, task, query, sort, verify });
       if (request !== assetTreeRequest.current || activeFilterFingerprint.current !== requestFilter) return;
       setAssetTree({
         nodes: result.nodes ?? [],
@@ -364,7 +371,7 @@ export default function FindingsPage() {
       setAssetTree((current) => ({ ...current, loading: false }));
       toast.error(`资产树加载失败：${(e as Error).message}`);
     }
-  }, [filterFingerprint, severity, status, vulnclass, task, query, sort]);
+  }, [filterFingerprint, severity, status, vulnclass, task, query, sort, verify]);
 
   const refreshGroups = React.useCallback(async () => {
     const requestFilter = filterFingerprint;
@@ -380,6 +387,7 @@ export default function FindingsPage() {
         task,
         query,
         sort,
+        verify,
       });
       if (request !== groupsRequest.current || activeFilterFingerprint.current !== requestFilter) return;
       setGroups(result.items);
@@ -388,7 +396,7 @@ export default function FindingsPage() {
     } catch {
       // Polling keeps the last successful snapshot visible.
     }
-  }, [filterFingerprint, page, pageSize, severity, status, vulnclass, task, query, sort]);
+  }, [filterFingerprint, page, pageSize, severity, status, vulnclass, task, query, sort, verify]);
 
   const loadGroup = React.useCallback(
     async (key: string, groupPage: number, groupPageSize: number) => {
@@ -417,6 +425,7 @@ export default function FindingsPage() {
           task: key,
           query,
           sort,
+          verify,
         });
         if (groupRequests.current[key] !== request || activeFilterFingerprint.current !== requestFilter) return;
         setGroupFindings((current) => ({
@@ -447,7 +456,7 @@ export default function FindingsPage() {
         }));
       }
     },
-    [filterFingerprint, severity, status, vulnclass, query, sort],
+    [filterFingerprint, severity, status, vulnclass, query, sort, verify],
   );
 
   React.useEffect(() => {
@@ -897,6 +906,30 @@ export default function FindingsPage() {
               ))}
             </SelectContent>
           </Select>
+
+          <Select value={verify} onValueChange={setVerify}>
+            <SelectTrigger size="sm" className="w-36" title="确定性验证层结论筛选">
+              <SelectValue placeholder="验证" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="reviewable">待复核（已验证）</SelectItem>
+              <SelectItem value="all">全部验证状态</SelectItem>
+              <SelectItem value="verified">验证通过</SelectItem>
+              <SelectItem value="inconclusive">无法判定</SelectItem>
+              <SelectItem value="verifying">验证中</SelectItem>
+              <SelectItem value="unverified">未验证</SelectItem>
+              <SelectItem value="rejected">已驳回</SelectItem>
+            </SelectContent>
+          </Select>
+          {!validatorOnline && (
+            <span
+              className="inline-flex items-center gap-1 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-xs text-amber-600 dark:text-amber-400"
+              title="验证服务不可达，当前展示全部发现（verify 筛选已降级）"
+            >
+              <TriangleAlertIcon className="size-3.5" aria-hidden="true" />
+              验证服务离线
+            </span>
+          )}
 
           <Select value={vulnclass} onValueChange={setVulnclass}>
             <SelectTrigger size="sm" className="w-40">
