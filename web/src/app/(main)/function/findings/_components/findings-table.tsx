@@ -56,6 +56,25 @@ export const FINDING_STATUSES: FindingStatus[] = [
 
 export const UNASSIGNED_TASK = "__unassigned__";
 
+// 确定性验证层结论徽标:label 与颜色。
+const VERIFY_META: Record<string, { label: string; className: string }> = {
+  verified: { label: "验证通过", className: "border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" },
+  inconclusive: { label: "无法判定", className: "border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400" },
+  verifying: { label: "验证中", className: "border-sky-500/40 bg-sky-500/10 text-sky-600 dark:text-sky-400" },
+  rejected: { label: "已驳回", className: "border-red-500/40 bg-red-500/10 text-red-600 dark:text-red-400" },
+  unverified: { label: "未验证", className: "" },
+};
+
+function verifyBadge(vs?: string) {
+  if (!vs || vs === "unverified") return null;
+  const meta = VERIFY_META[vs] ?? { label: vs, className: "" };
+  return (
+    <Badge variant="outline" className={meta.className} title={`确定性验证层结论：${meta.label}`}>
+      {meta.label}
+    </Badge>
+  );
+}
+
 // 行内编辑缓冲:当前展开行的名称/类别/严重等级。
 export interface FindingEdit {
   name: string;
@@ -213,7 +232,10 @@ export function FindingsTable({
                       <span className="truncate font-medium">{f.name || f.vulnclass || "未分类"}</span>
                     )}
                     <span className="truncate text-xs text-muted-foreground">{f.summary}</span>
-                    <Badge variant="outline">流量证据 {f.traffic_count ?? 0} 条</Badge>
+                    <span className="flex flex-wrap gap-1">
+                      <Badge variant="outline">流量证据 {f.traffic_count ?? 0} 条</Badge>
+                      {verifyBadge(f.verify_status)}
+                    </span>
                   </div>
                 </TableCell>
                 <TableCell>
