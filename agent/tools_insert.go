@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/Autumn-27/artex/db"
+	"github.com/Autumn-27/artex/honeydetect"
 	actool "github.com/Autumn-27/norma/tool"
 )
 
@@ -112,6 +113,9 @@ type assetInputItem struct {
 	// ---- service (other) ----
 	Port  int    `json:"port"`
 	Proto string `json:"proto"`
+
+	// ---- service 可选:协议 banner / HTTP Server 头(蜜罐静态签名识别用,不落库) ----
+	Banner string `json:"banner"`
 
 	// ---- endpoint ----
 	Method string           `json:"method"`
@@ -308,6 +312,12 @@ func (t *ToolSet) insertAssets() actool.CoreTool {
 							IP:            svcIP,
 							TaskID:        taskID,
 						})
+						if err == nil {
+							// 蜜罐静态签名识别:落库后跑签名(title/banner)。
+							t.evaluateHoneypot(id, honeydetect.ServiceView{
+								Port: urlPort(item.URL), Banner: item.Banner, Title: item.PageTitle,
+							})
+						}
 					} else {
 						id, err = t.as.UpsertOtherService(db.UpsertOtherServiceReq{
 							Domain:      item.Domain,
@@ -317,6 +327,12 @@ func (t *ToolSet) insertAssets() actool.CoreTool {
 							Auth:        item.Auth,
 							TaskID:      taskID,
 						})
+						if err == nil {
+							// 蜜罐静态签名识别:落库后跑签名(port/banner)。
+							t.evaluateHoneypot(id, honeydetect.ServiceView{
+								Port: item.Port, Banner: item.Banner,
+							})
+						}
 					}
 
 				case "endpoint":

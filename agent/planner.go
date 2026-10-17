@@ -343,7 +343,8 @@ const plannerDefaultTmpl = `你是一个网络安全平台授权渗透测试系�
 func plannerSystem(goal, dataDir, workDir string) string {
 	body := renderSystem("planner", plannerDefaultTmpl, PlannerVars{Goal: goal, DataDir: dataDir, Now: nowStr()})
 	// L2 meta 铁律(反问思维链):静态常量追加在 system 固定尾,不含每轮变量,利于 prompt 缓存。
-	return body + artifactSpec(workDir) + chainskel.PlannerMetaRules
+	// plannerHoneypotRules(蜜罐处置纪律)同为代码固定尾,一律追加。
+	return body + artifactSpec(workDir) + chainskel.PlannerMetaRules + plannerHoneypotRules
 }
 
 // Plan runs one planning round. emit, if non-nil, receives the planner's execution
