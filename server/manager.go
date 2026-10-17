@@ -247,6 +247,9 @@ type Manager struct {
 	// capture is on it becomes the MITM's upstream; when capture is off it is
 	// injected into agent bash env / WebFetch directly. See ProxyAddr.
 	globalProxy string
+	// egress 是出口审查的进程级敏感指纹集合(见 guard/egress.go):每个任务的
+	// Guard 通过 SetEgress 引用同一份,profile 变更重新注册即对全部任务生效。
+	egress *guard.EgressGuard
 }
 
 // Settings keys the UI toggles at runtime.
@@ -378,7 +381,7 @@ func NewManager(dir, proxyAddr string) (*Manager, error) {
 	if err := pg.EnsureLLMUsageTable(); err != nil {
 		log.Printf("[llmusage] create table: %v", err)
 	}
-	m := &Manager{dir: dir, pg: pg, assets: pg.Assets(), tasks: map[string]*Task{}, interceptor: intercept.New(pg)}
+	m := &Manager{dir: dir, pg: pg, assets: pg.Assets(), tasks: map[string]*Task{}, interceptor: intercept.New(pg), egress: guard.NewEgressGuard()}
 	if proxyAddr != "" {
 		tr, err := traffic.Open(filepath.Join(dir, "traffic"), proxyAddr)
 		if err != nil {
@@ -833,13 +836,15 @@ func unixNanoOrZero(t *time.Time) int64 {
 	return t.UnixNano()
 }
 
-func taskFromPG(pt *pgdb.Task, store *pgdb.ExplorationStore, ic *intercept.Interceptor, pg *pgdb.DB) *Task {
+func taskFromPG(pt *pgdb.Task, store *pgdb.ExplorationStore, ic *intercept.Interceptor, pg *pgdb.DB, eg *guard.EgressGuard) *Task {
 	g := guard.NewWithInterceptor(ic)
 	// 确定性验证层 Phase 3：report_finding 成功后异步转发到验证服务。
 	// 每个 Guard 实例只注册一次（挂在 server/engine.go hook 链的 guard 侧）。
 	g.On(hook.PostToolUse, agent.NewValidatorHook(pg))
 	// RoE 范围强制：Bash/HTTP 工具的交互目标与 task_scope 比对,防赏金 scope 出界。
 	g.SetRoE(newRoEConfig(pg))
+	// 出口审查:进程级共享敏感指纹集合,防 agent 把平台密钥外发。
+	g.SetEgress(eg)
 	return &Task{
 		ID: strconv.FormatInt(pt.ID, 10), ExpID: pt.ExplorationID,
 		Name:       pt.Name,
@@ -908,7 +913,7 @@ func (m *Manager) CreateTaskWithOptions(description, goal string, opts pgdb.Task
 	if err != nil {
 		return nil, err
 	}
-	t := taskFromPG(pt, m.pg.Exploration(pt.ExplorationID), m.interceptor, m.pg)
+	t := taskFromPG(pt, m.pg.Exploration(pt.ExplorationID), m.interceptor, m.pg, m.egress)
 	m.mu.Lock()
 	m.tasks[t.ID] = t
 	m.active = t.ID
@@ -1107,7 +1112,7 @@ func (m *Manager) LoadExisting() []*Task {
 		if _, ok := m.tasks[id]; ok {
 			continue
 		}
-		t := taskFromPG(pt, m.pg.Exploration(pt.ExplorationID), m.interceptor, m.pg)
+		t := taskFromPG(pt, m.pg.Exploration(pt.ExplorationID), m.interceptor, m.pg, m.egress)
 		m.tasks[id] = t
 		loaded = append(loaded, t)
 	}
