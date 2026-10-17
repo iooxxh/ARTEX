@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/Autumn-27/artex/db"
+	"github.com/iooxxh/artex/db"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Autumn-27/artex/db"
+	"github.com/iooxxh/artex/db"
 )
 
 // Input bundles what the report needs.
