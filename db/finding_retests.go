@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/Autumn-27/artex/agent/chainskel"
 	"strings"
 	"time"
 )
@@ -125,10 +126,26 @@ func (d *DB) CreateFindingRetest(ctx context.Context, findingID int64, notes str
 
 func (r *FindingRetest) InitialMessage() string {
 	msg := fmt.Sprintf("请复测漏洞 #%d。先调用 get_finding_retest_context 读取本会话关联的原始证据与约束，再执行针对性验证，最后调用 record_finding_retest_result 保存结论。", r.FindingID)
+	// 反问思维链 verifier 反证 checklist:按漏洞类别注入专项判据,让复测
+	// 逐条反证而不是凭印象下结论;vulnclass 取不到时通用层照常注入。
+	msg += "\n" + chainskel.VerifierChecklist(retestVulnClass(r.Snapshot))
 	if r.Notes != "" {
 		msg += "\n\n本次复测补充说明：\n" + r.Notes
 	}
 	return msg
+}
+
+// retestVulnClass 从复测快照里提取 finding.vulnclass;解析失败返回 ""。
+func retestVulnClass(snapshot json.RawMessage) string {
+	var s struct {
+		Finding struct {
+			VulnClass string `json:"vulnclass"`
+		} `json:"finding"`
+	}
+	if err := json.Unmarshal(snapshot, &s); err != nil {
+		return ""
+	}
+	return s.Finding.VulnClass
 }
 
 func (d *DB) ListFindingRetests(findingID int64) ([]*FindingRetest, error) {

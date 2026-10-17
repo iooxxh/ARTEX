@@ -240,3 +240,38 @@ func TestRetestFixedTriageOnlyAfterSuccessfulCompletion(t *testing.T) {
 		})
 	}
 }
+
+// TestInitialMessageVerifierChecklist:复测初始消息按漏洞类别注入反问思维链
+// 反证 checklist(通用层永远带,专项判据按类别匹配);vulnclass 取不到时不崩。
+func TestInitialMessageVerifierChecklist(t *testing.T) {
+	mk := func(vulnclass string) *FindingRetest {
+		snap, _ := json.Marshal(map[string]any{
+			"finding": map[string]any{"vulnclass": vulnclass},
+		})
+		return &FindingRetest{FindingID: 1, Snapshot: snap}
+	}
+	// sqli 类别:通用层 + sqli 专项判据。
+	msg := mk("sqli").InitialMessage()
+	if !strings.Contains(msg, "200 ≠ 打通") {
+		t.Fatalf("复测消息缺通用反证层:\n%s", msg)
+	}
+	if !strings.Contains(msg, "真假分叉") {
+		t.Fatalf("sqli 复测消息缺 sqli 专项判据:\n%s", msg)
+	}
+	// 未知类别:只有通用层,不崩。
+	msg2 := mk("weird-class-xyz").InitialMessage()
+	if !strings.Contains(msg2, "200 ≠ 打通") {
+		t.Fatalf("未知类别复测消息缺通用反证层:\n%s", msg2)
+	}
+	// 快照损坏:静默降级,消息照常生成。
+	bad := &FindingRetest{FindingID: 2, Snapshot: json.RawMessage(`{bad`)}
+	if msg3 := bad.InitialMessage(); !strings.Contains(msg3, "请复测漏洞 #2") {
+		t.Fatalf("快照损坏时消息生成失败:\n%s", msg3)
+	}
+	// 补充说明保留。
+	withNotes := mk("xss")
+	withNotes.Notes = "重点看存储型"
+	if msg4 := withNotes.InitialMessage(); !strings.Contains(msg4, "重点看存储型") {
+		t.Fatalf("复测补充说明丢失:\n%s", msg4)
+	}
+}
