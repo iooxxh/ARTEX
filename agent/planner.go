@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/Autumn-27/artex/agent/chainskel"
 	"github.com/Autumn-27/artex/db"
 	"github.com/Autumn-27/artex/intercept"
 	"github.com/Autumn-27/norma/agentcore"
@@ -341,7 +342,8 @@ const plannerDefaultTmpl = `你是一个网络安全平台授权渗透测试系�
 
 func plannerSystem(goal, dataDir, workDir string) string {
 	body := renderSystem("planner", plannerDefaultTmpl, PlannerVars{Goal: goal, DataDir: dataDir, Now: nowStr()})
-	return body + artifactSpec(workDir)
+	// L2 meta 铁律(反问思维链):静态常量追加在 system 固定尾,不含每轮变量,利于 prompt 缓存。
+	return body + artifactSpec(workDir) + chainskel.PlannerMetaRules
 }
 
 // Plan runs one planning round. emit, if non-nil, receives the planner's execution
