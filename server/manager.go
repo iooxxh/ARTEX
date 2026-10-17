@@ -845,6 +845,8 @@ func taskFromPG(pt *pgdb.Task, store *pgdb.ExplorationStore, ic *intercept.Inter
 	g.SetRoE(newRoEConfig(pg))
 	// 出口审查:进程级共享敏感指纹集合,防 agent 把平台密钥外发。
 	g.SetEgress(eg)
+	// tarpit 熔断:每任务每 host 抓取计数,超预算写 hint 提示 planner 停派该方向。
+	g.SetTarpit(newTarpitConfig(pg, store))
 	return &Task{
 		ID: strconv.FormatInt(pt.ID, 10), ExpID: pt.ExplorationID,
 		Name:       pt.Name,

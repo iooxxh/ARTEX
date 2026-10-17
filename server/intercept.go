@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -26,6 +27,38 @@ const judgeWorkerLane = "judge"
 // settingRoEEnforcement is the settings 键 for the RoE scope-enforcement mode:
 // "off" | "warn"(默认) | "strict". See guard.RoEConfig.
 const settingRoEEnforcement = "roe_enforcement"
+
+// settingTarpitFetchBudget is the settings 键 for the tarpit per-host fetch
+// budget (默认 40,见 guard.defaultTarpitFetchBudget);<=0 或非法值回落默认。
+const settingTarpitFetchBudget = "tarpit_fetch_budget"
+
+// newTarpitConfig 装配 tarpit 熔断:预算读 settings 键 tarpit_fetch_budget
+// (每次调用现读,改设置即时生效;非法/<=0 由 guard 回落默认 40);熔断回调写一条
+// hint 节点进探索图——planner 每轮 graph overview 必读 hints(与停滞检测的 hint
+// 同一通道),提示停派该 host 方向。
+func newTarpitConfig(pg *db.DB, store *db.ExplorationStore) guard.TarpitConfig {
+	return guard.TarpitConfig{
+		Budget: func() int {
+			v, _, err := pg.GetSetting(settingTarpitFetchBudget)
+			if err != nil {
+				return 0 // 读取失败 → guard 回落默认预算
+			}
+			n, _ := strconv.Atoi(strings.TrimSpace(v))
+			return n
+		},
+		Hint: func(host string, count int) {
+			if store == nil {
+				return
+			}
+			if _, err := store.AddNode(db.KindHint, map[string]any{
+				"text": fmt.Sprintf("【tarpit 熔断】host %s 的抓取调用已达 %d 次,超过预算,疑似 tarpit 迷宫(Nepenthes/AI Labyrinth 类反爬虫陷阱)。请停止向该 host 派发抓取/爬虫类意图,改走其他侦察面;平台侧已对该 host 转为 warn 放行计数。", host, count),
+				"kind": "tarpit", "host": host, "count": count,
+			}, 0, "active", "guard", nil); err != nil {
+				log.Printf("[guard][tarpit] 写 hint 失败: %v", err)
+			}
+		},
+	}
+}
 
 // chatGuard returns a guard wired with the manager's interceptor, used for chat
 // conversations. Called once per applyLLM so a new LLM config always gets a fresh guard.

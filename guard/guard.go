@@ -1,6 +1,8 @@
 // Package guard implements the safety boundary layer (docs §11): an audit log,
 // user-configured intercept-rule evaluation, RoE authorization-scope enforcement
-// (see roe.go — Bash/HTTP 工具的交互目标与任务 task_scope 比对), and
+// (see roe.go — Bash/HTTP 工具的交互目标与任务 task_scope 比对), egress
+// sensitive-fingerprint screening (see egress.go), tarpit circuit-breaking
+// (see tarpit.go — WebFetch 每 host 抓取超预算写 hint 提示 planner), and
 // Observer/G5 failure attribution. Every tool call passes through the PreToolUse
 // hook before executing.
 // Destructive/exfil gating is no longer hard-coded here — it lives in the
@@ -38,6 +40,7 @@ type Guard struct {
 	interceptor *intercept.Interceptor // optional; nil disables user-configured rules
 	roe         RoEConfig              // optional; Scope==nil disables the RoE check
 	egress      *EgressGuard           // optional; 出口审查(敏感指纹拦截),nil 关闭
+	tarpit      *tarpitState           // optional; tarpit 熔断,每任务每 host 抓取计数,nil 关闭
 }
 
 // New creates a Guard without user-configured intercept rules (used for pentest
@@ -97,6 +100,9 @@ func (g *Guard) preToolUse(ctx context.Context, ev hook.Event) hook.Result {
 	if res, stop := g.checkRoE(ctx, ev, cmd); stop {
 		return res
 	}
+	// tarpit 熔断:每 host 抓取计数,超预算写一次 hint 提示 planner,
+	// 之后对该 host 仍 warn 放行(不硬 block,防误杀真实大站)。
+	g.checkTarpit(ev)
 	return g.applyIntercept(ctx, ev)
 }
 
