@@ -17,11 +17,11 @@
 
 ### 关于本仓库
 
-本仓库是 [iooxxh](https://github.com/iooxxh) 基于 ARTEX 开源版的**二次开发版本**，在原版基础上新增：确定性验证层对接、RoE 范围审批、findings 合并去重、反问思维链（详见下文[二改功能](#二改功能)）。
+本仓库是 [iooxxh](https://github.com/iooxxh) 基于 ARTEX 开源版的**二次开发版本**，在原版基础上新增：确定性验证层对接、RoE 范围审批、findings 合并去重、反问思维链、蜜罐识别、出口审查、tarpit 熔断（详见下文[二改功能](#二改功能)）。
 
 - 上游：[Autumn-27/ARTEX](https://github.com/Autumn-27/ARTEX)（原作者，已删库；致谢原作者的开源贡献，原作者微信公众号为 **SecSentry**）
 
-> 本仓库的改动（验证层对接、RoE、去重、思维链）均为本 fork 独有，上游不包含。
+> 本仓库的改动（验证层对接、RoE、去重、思维链、蜜罐识别、出口审查、tarpit 熔断）均为本 fork 独有，上游不包含。
 
 ---
 
@@ -55,9 +55,9 @@
 
 ## 二改功能（本 fork 独有）
 
-相比最初原版新增的四块功能（原版均无）：
+相比最初原版新增的功能（原版均无），其中验证层对接为自研，其余六项移植自 [focus-agent](https://github.com/XXXXXQ-0206/focus-agent)：
 
-### 1. 确定性验证层对接
+### 1. 确定性验证层对接（自研）
 
 - **原版**：`report_finding` 上报后直接进入复核队列，LLM 判定的"疑似漏洞"误报全部需要人工逐个甄别。
 - **本 fork**：通过 PostToolUse hook 把每次 `report_finding` 的成功上报**异步**转发给独立的验证服务 [artex-validator](https://github.com/iooxxh/artex-validator)，用**代码**（而非 LLM）二次确认漏洞真实存在。只有验证通过（`verified`）或无法判定（`inconclusive`）的 finding 才会进入"发现"页默认的人工复核队列。
@@ -65,7 +65,7 @@
 - 配置：环境变量 `VALIDATOR_URL`（默认 `http://localhost:8080`）；验证服务不可达时 hook 只记日志，主流程不受影响
 - 详见 [docs/VALIDATOR.md](docs/VALIDATOR.md)
 
-### 2. RoE 范围审批
+### 2. RoE 范围审批（移植自 focus-agent）
 
 - **原版**：guard 只做工具调用的审批与审计，不检查交互目标是否在任务登记的范围内。
 - **本 fork**：agent 每次调用 Bash / WebFetch 类工具前，guard 自动提取交互目标（host），与本任务已登记的 `task_scope` 比对。范围外的目标按三档模式处理，防止测试打到范围外的资产。
@@ -74,15 +74,35 @@
 - 配置：系统设置页搜索 `roe_enforcement`；范围复用任务范围页，随 `add_task_scope` 即时生效
 - 详见 [docs/ROE.md](docs/ROE.md)
 
-### 3. findings 合并去重
+### 3. findings 合并去重（移植自 focus-agent）
 
 - **原版**：重复上报的 finding 各自独立成行，复核队列容易被重复发现淹没。
 - **本 fork**：`report_finding` 入库时自动查重——同一任务内、归一化 vulnclass 相同、主资产相同的 finding 合并到既有记录（severity 取最高、evidence 追加），不新增行，省人工复核时间。
 
-### 4. 反问思维链（chains）
+### 4. 反问思维链（chains）（移植自 focus-agent）
 
 - **原版**：planner/worker 只靠 system prompt 里的固定指令，没有场景化的知识注入机制，模型经常"想不起来要查知识"。
 - **本 fork**：四层架构（L1 代码判据 → L2 铁律常驻 → L3 场景骨架按意图注入 → L4 参考语料按需读取），外加 7 类漏洞的反证 checklist 在复测时自动注入。语料覆盖 SQLi / XSS / SSRF / 上传 / WAF 绕过 / 侦察，位于 `skills/chains-*/` 目录。
+
+### 5. 蜜罐识别（移植自 focus-agent）
+
+- **原版**：没有蜜罐概念，agent 可能在蜜罐里浪费时间甚至被反制追踪。
+- **本 fork**：内置 11 条蜜罐签名（Cowrie / OpenCanary / Kippo 等），service 资产落库后自动识别。单信号只降级交互（被动/只读，不投递不爆破），双信号才封锁方向；识别结果回写资产表并记入探索图。
+
+### 6. 出口审查（移植自 focus-agent）
+
+- **原版**：agent 的工具调用不受内容审查，可能把平台敏感信息（LLM 的 API key、jwt.key、数据库密码）外泄到目标或日志里。
+- **本 fork**：guard 在 PreToolUse 第一道检查命令/请求中是否包含已注册的敏感信息指纹。指纹为 SHA256 精确匹配（只存哈希不存原文），不存在模式误报；命中即拦截且审计不落秘密。
+
+- 覆盖：激活 LLM profile 的 API key、jwt.key（原文/hex/base64 三种形态）、PG DSN 中的密码
+- 配置：系统设置 `egress_custom_secrets`，换行分隔自定义要保护的密钥
+
+### 7. tarpit 熔断（移植自 focus-agent）
+
+- **原版**：agent 被爬虫陷阱吸住时会无限抓取，空转烧 token。
+- **本 fork**：同一任务内、同一 host 的 WebFetch 调用超过预算自动熔断，planner 收到 hint 后改走其他侦察面。熔断后仍 warn 放行（防误杀真实大站），不硬 block。
+
+- 配置：系统设置 `tarpit_fetch_budget`（默认 40，非法值回落默认）
 
 ---
 
