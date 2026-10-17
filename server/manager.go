@@ -18,6 +18,7 @@ import (
 	pgdb "github.com/Autumn-27/artex/db"
 	"github.com/Autumn-27/artex/enrich"
 	"github.com/Autumn-27/artex/guard"
+	"github.com/Autumn-27/artex/honeydetect"
 	"github.com/Autumn-27/artex/intercept"
 	"github.com/Autumn-27/artex/traffic"
 	"github.com/Autumn-27/norma/hook"
@@ -355,6 +356,9 @@ func NewManager(dir, proxyAddr string) (*Manager, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, err
 	}
+	// 蜜罐静态签名库:装配 dataDir 下的签名文件绝对路径(存在则优先并按
+	// mtime 热更新,便于不落盘发版地运营签名库;缺失时引擎回落包内嵌签名库,不空载)。
+	honeydetect.SetSignaturesPath(filepath.Join(dir, "signatures", "honeypot.json"))
 	dsn, source, err := pgdb.DSN()
 	if err != nil {
 		return nil, err
