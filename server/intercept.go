@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Autumn-27/artex/agent"
 	"github.com/Autumn-27/artex/db"
 	"github.com/Autumn-27/artex/guard"
 	"github.com/Autumn-27/artex/intercept"
@@ -22,10 +23,64 @@ import (
 // calls, so judge spend can be queried apart from the worker/planner/main lanes.
 const judgeWorkerLane = "judge"
 
+// settingRoEEnforcement is the settings 键 for the RoE scope-enforcement mode:
+// "off" | "warn"(默认) | "strict". See guard.RoEConfig.
+const settingRoEEnforcement = "roe_enforcement"
+
 // chatGuard returns a guard wired with the manager's interceptor, used for chat
 // conversations. Called once per applyLLM so a new LLM config always gets a fresh guard.
+// RoE 范围检查同样装配(无任务上下文时自动放行,见 guard.RoEConfig)。
 func (s *Server) chatGuard() *guard.Guard {
-	return guard.NewWithInterceptor(s.m.interceptor)
+	g := guard.NewWithInterceptor(s.m.interceptor)
+	g.SetRoE(newRoEConfig(s.m.pg))
+	return g
+}
+
+// newRoEConfig builds the guard RoE wiring backed by pg: mode from the
+// roe_enforcement settings 键, scope rules lazily read from task_scope per call
+// (范围随 add_task_scope 即时生效,guard 不缓存)。
+func newRoEConfig(pg *db.DB) guard.RoEConfig {
+	return guard.RoEConfig{
+		Mode: func() string {
+			v, _, _ := pg.GetSetting(settingRoEEnforcement)
+			return v
+		},
+		Scope: func(taskID int64) []guard.ScopeRule {
+			rows, err := pg.Assets().ListTaskScope(taskID)
+			if err != nil {
+				// 读取失败按未登记范围处理(Unknown → 放行),与覆盖度 fail-open 一致。
+				return nil
+			}
+			return scopeRulesFromRows(rows)
+		},
+		TaskIDOf: func(ctx context.Context) int64 {
+			return agent.RunInfoFrom(ctx).TaskID
+		},
+	}
+}
+
+// scopeRulesFromRows normalizes db task_scope rows into guard scope rules:
+// root_domain/subdomain → domain;ip(/32、/128 网段)与 cidr → cidr;icp 原样;
+// company/keyword 无可匹配的主机值,跳过(keyword 本来就是死规则)。
+func scopeRulesFromRows(rows []db.TaskScope) []guard.ScopeRule {
+	out := make([]guard.ScopeRule, 0, len(rows))
+	for _, r := range rows {
+		switch r.Kind {
+		case "root_domain", "subdomain":
+			if r.Domain != "" {
+				out = append(out, guard.ScopeRule{Kind: "domain", Value: r.Domain})
+			}
+		case "ip", "cidr":
+			if r.Net != "" {
+				out = append(out, guard.ScopeRule{Kind: "cidr", Value: r.Net})
+			}
+		case "icp":
+			if r.Value != "" {
+				out = append(out, guard.ScopeRule{Kind: "icp", Value: r.Value})
+			}
+		}
+	}
+	return out
 }
 
 // wireInterceptReviewer installs the LLM fallback judge into the interceptor. The

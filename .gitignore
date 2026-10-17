@@ -29,6 +29,7 @@ web/next-env.d.ts
 !/docs/架构复核与演进设计.md
 !/docs/问题驱动的实验搜索架构.md
 !/docs/VALIDATOR.md
+!/docs/ROE.md
 !/docs/创新路线/
 /docs/创新路线/*
 !/docs/创新路线/*.md

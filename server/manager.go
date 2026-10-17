@@ -834,6 +834,8 @@ func taskFromPG(pt *pgdb.Task, store *pgdb.ExplorationStore, ic *intercept.Inter
 	// 确定性验证层 Phase 3：report_finding 成功后异步转发到验证服务。
 	// 每个 Guard 实例只注册一次（挂在 server/engine.go hook 链的 guard 侧）。
 	g.On(hook.PostToolUse, agent.NewValidatorHook(pg))
+	// RoE 范围强制：Bash/HTTP 工具的交互目标与 task_scope 比对,防赏金 scope 出界。
+	g.SetRoE(newRoEConfig(pg))
 	return &Task{
 		ID: strconv.FormatInt(pt.ID, 10), ExpID: pt.ExplorationID,
 		Name:       pt.Name,
