@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Autumn-27/artex/db"
-	"github.com/Autumn-27/artex/honeydetect"
+	"github.com/iooxxh/artex/db"
+	"github.com/iooxxh/artex/honeydetect"
 	actool "github.com/Autumn-27/norma/tool"
 )
 
