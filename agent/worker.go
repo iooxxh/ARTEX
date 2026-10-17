@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Autumn-27/artex/agent/chainskel"
 	"github.com/Autumn-27/artex/db"
 	"github.com/Autumn-27/artex/intercept"
 	"github.com/Autumn-27/norma/agentcore"
@@ -290,7 +291,8 @@ func workerSystem(proxyAddr, caCert, dataDir, runDir string) string {
 	// caCert is present only when the recording MITM is on, which is exactly when
 	// the traffic_* tools are registered — so it gates the traffic-tool note.
 	// Optional finding guidance is added for every role after tool resolution.
-	return body + workerTrafficBlock(caCert != "") + workerArtifactSpec(runDir)
+	// L2 meta 铁律(反问思维链):静态常量追加在 system 固定尾,不含每轮变量,利于 prompt 缓存。
+	return body + workerTrafficBlock(caCert != "") + workerArtifactSpec(runDir) + chainskel.WorkerMetaRules
 }
 
 // renderIntentTask formats the claimed intent for the worker's launch USER message:
@@ -418,6 +420,14 @@ func (w *Worker) execute(ctx context.Context, name string, taskID int64, as *db.
 		}
 	}
 	sysBody += "\n\n开始执行上面这条意图：只做它、只产生事实、assets、finding、做完即停。"
+	// L3 反问骨架(反问思维链):按意图 chain_tags(或 summary 关键词回退)注入
+	// 对应攻击面的"场景→判据→转向"决策骨架 + L4 原文指引;匹配不中静默不注入。
+	if sk := chainskel.ForIntent(intent.Payload); sk != "" {
+		sysBody += sk
+	}
+	if rg := chainskel.RefsGuideForIntent(intent.Payload); rg != "" {
+		sysBody += rg
+	}
 	system, boundary := deferredSystem(sysBody, def)
 	// 任务级 deadline(经 ctx 注入)夹逼本 run 的墙钟预算 + 决定收尾词(见 taskclock.go)。
 	tc := taskClockFrom(ctx)
