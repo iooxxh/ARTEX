@@ -19,12 +19,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Autumn-27/artex/agent"
-	"github.com/Autumn-27/artex/db"
-	"github.com/Autumn-27/artex/llmpool"
-	"github.com/Autumn-27/artex/llmrec"
-	"github.com/Autumn-27/artex/report"
-	"github.com/Autumn-27/artex/traffic"
+	"github.com/iooxxh/artex/agent"
+	"github.com/iooxxh/artex/db"
+	"github.com/iooxxh/artex/llmpool"
+	"github.com/iooxxh/artex/llmrec"
+	"github.com/iooxxh/artex/report"
+	"github.com/iooxxh/artex/traffic"
 	"github.com/Autumn-27/norma/llm"
 	"github.com/Autumn-27/norma/transcript"
 )
