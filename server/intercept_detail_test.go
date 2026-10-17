@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Autumn-27/artex/db"
-	"github.com/Autumn-27/artex/intercept"
+	"github.com/iooxxh/artex/db"
+	"github.com/iooxxh/artex/intercept"
 )
 
 func TestInterceptDetailHTTP(t *testing.T) {
