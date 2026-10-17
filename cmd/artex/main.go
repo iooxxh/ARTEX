@@ -16,10 +16,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Autumn-27/artex/agent"
-	"github.com/Autumn-27/artex/config"
-	"github.com/Autumn-27/artex/selfupdate"
-	"github.com/Autumn-27/artex/server"
+	"github.com/iooxxh/artex/agent"
+	"github.com/iooxxh/artex/config"
+	"github.com/iooxxh/artex/selfupdate"
+	"github.com/iooxxh/artex/server"
 )
 
 // version is the build version, injected at release time via
