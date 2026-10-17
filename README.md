@@ -20,9 +20,8 @@
 本仓库是 [iooxxh](https://github.com/iooxxh) 基于 ARTEX 开源版的**二次开发版本**，在原版基础上新增：确定性验证层对接、RoE 范围审批、findings 合并去重、反问思维链（详见下文[二改功能](#二改功能)）。
 
 - 上游：[Autumn-27/ARTEX](https://github.com/Autumn-27/ARTEX)（原作者，已删库；致谢原作者的开源贡献，原作者微信公众号为 **SecSentry**）
-- 中转备份：[mhtsec/ARTEX](https://github.com/mhtsec/ARTEX)（闭源前最后一个版本的纯源码备份，感谢棉花糖的备份工作）
 
-> 本仓库的改动（验证层对接、RoE、去重、思维链）均为本 fork 独有，上游/mhtsec 备份版不包含。
+> 本仓库的改动（验证层对接、RoE、去重、思维链）均为本 fork 独有，上游不包含。
 
 ---
 
