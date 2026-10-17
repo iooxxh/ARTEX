@@ -33,6 +33,8 @@ const settingRoEEnforcement = "roe_enforcement"
 func (s *Server) chatGuard() *guard.Guard {
 	g := guard.NewWithInterceptor(s.m.interceptor)
 	g.SetRoE(newRoEConfig(s.m.pg))
+	// 出口审查:chat/planner/mainagent 同样过敏感指纹拦截。
+	g.SetEgress(s.m.egress)
 	return g
 }
 

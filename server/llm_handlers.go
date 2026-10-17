@@ -72,6 +72,9 @@ func (s *Server) applyLLM(cfg agent.Config) error {
 	s.llmOn = true
 	s.cfgMu.Unlock()
 	s.invalidateTaskAgents()
+	// 出口审查:applyLLM 是 LLM profile 变更的唯一漏斗(保存/激活/删除都经
+	// reapplyActiveProfile→applyLLM),在这里整体替换 llm_api_key 指纹。
+	s.registerEgressFingerprints()
 
 	// wake the active task so a task created while idle starts exploring.
 	if t := s.m.ActiveTask(); t != nil {
