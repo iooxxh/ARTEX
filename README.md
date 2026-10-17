@@ -1,10 +1,8 @@
 <div align="center">
 
-# ARTEX
+# ARTEX（iooxxh 二改版）
 
-面向企业攻击面的自主渗透测试智能体（Go 后端 + Next.js 前端）
-
-🌐 **在线 Demo（模拟数据）**： <https://artex-demo.mhtsec.com>
+自主渗透测试智能体（Go 后端 + Next.js 前端）
 
 </div>
 
@@ -19,21 +17,16 @@
 
 ### 关于本仓库
 
-本仓库是 ARTEX 开源版闭源前**最后一个版本的纯源码备份**，后续由 **棉花糖**（[@mhtsec](https://github.com/mhtsec)，公众号 **棉花糖fans**）维护，欢迎参与共建：
+本仓库是 [iooxxh](https://github.com/iooxxh) 基于 ARTEX 开源版的**二次开发版本**，在原版基础上新增：确定性验证层对接、RoE 范围审批、findings 合并去重、反问思维链（详见下文[二改功能](#二改功能)）。
 
-- 🐛 问题反馈 / 功能建议：[提交 Issue](https://github.com/mhtsec/ARTEX/issues)
-- 🛠 代码共建：欢迎提交 [Pull Request](https://github.com/mhtsec/ARTEX/pulls)
-- 💬 交流群：见文末 [交流与社区](#交流与社区)
+- 上游：[Autumn-27/ARTEX](https://github.com/Autumn-27/ARTEX)（原作者，已删库；致谢原作者的开源贡献，原作者微信公众号为 **SecSentry**）
+- 中转备份：[mhtsec/ARTEX](https://github.com/mhtsec/ARTEX)（闭源前最后一个版本的纯源码备份，感谢棉花糖的备份工作）
 
-> 原 Docker 镜像源 `autumn27/artex` 已失效，现由本仓库自维护镜像 `mianhuatang11/artex`（Docker Hub）；拉取失败时可 `docker compose build` 从纯源码本地构建，无任何外部预编译依赖。
->
-> 致谢原作者的开源贡献：原作者微信公众号为 **SecSentry**，原项目地址 [Autumn-27/ARTEX](https://github.com/Autumn-27/ARTEX)。
+> 本仓库的改动（验证层对接、RoE、去重、思维链）均为本 fork 独有，上游/mhtsec 备份版不包含。
 
 ---
 
 ## 截图预览
-
-> 完整交互见[在线 Demo](https://artex-demo.mhtsec.com)。
 
 | 仪表盘（总览 / Token 消耗 / 活动流） | 任务列表 |
 | :---: | :---: |
@@ -61,6 +54,39 @@
 
 ---
 
+## 二改功能（本 fork 独有）
+
+相比最初原版新增的四块功能（原版均无）：
+
+### 1. 确定性验证层对接
+
+- **原版**：`report_finding` 上报后直接进入复核队列，LLM 判定的"疑似漏洞"误报全部需要人工逐个甄别。
+- **本 fork**：通过 PostToolUse hook 把每次 `report_finding` 的成功上报**异步**转发给独立的验证服务 [artex-validator](https://github.com/iooxxh/artex-validator)，用**代码**（而非 LLM）二次确认漏洞真实存在。只有验证通过（`verified`）或无法判定（`inconclusive`）的 finding 才会进入"发现"页默认的人工复核队列。
+
+- 配置：环境变量 `VALIDATOR_URL`（默认 `http://localhost:8080`）；验证服务不可达时 hook 只记日志，主流程不受影响
+- 详见 [docs/VALIDATOR.md](docs/VALIDATOR.md)
+
+### 2. RoE 范围审批
+
+- **原版**：guard 只做工具调用的审批与审计，不检查交互目标是否在任务登记的范围内。
+- **本 fork**：agent 每次调用 Bash / WebFetch 类工具前，guard 自动提取交互目标（host），与本任务已登记的 `task_scope` 比对。范围外的目标按三档模式处理，防止测试打到范围外的资产。
+
+- 三档：`off`（关闭）/ `warn`（默认，仅告警+审计）/ `strict`（范围外进人工审批）
+- 配置：系统设置页搜索 `roe_enforcement`；范围复用任务范围页，随 `add_task_scope` 即时生效
+- 详见 [docs/ROE.md](docs/ROE.md)
+
+### 3. findings 合并去重
+
+- **原版**：重复上报的 finding 各自独立成行，复核队列容易被重复发现淹没。
+- **本 fork**：`report_finding` 入库时自动查重——同一任务内、归一化 vulnclass 相同、主资产相同的 finding 合并到既有记录（severity 取最高、evidence 追加），不新增行，省人工复核时间。
+
+### 4. 反问思维链（chains）
+
+- **原版**：planner/worker 只靠 system prompt 里的固定指令，没有场景化的知识注入机制，模型经常"想不起来要查知识"。
+- **本 fork**：四层架构（L1 代码判据 → L2 铁律常驻 → L3 场景骨架按意图注入 → L4 参考语料按需读取），外加 7 类漏洞的反证 checklist 在复测时自动注入。语料覆盖 SQLi / XSS / SSRF / 上传 / WAF 绕过 / 侦察，位于 `skills/chains-*/` 目录。
+
+---
+
 ## 资产同步（ScopeSentry）
 
 支持从 [ScopeSentry](https://github.com/Autumn-27/ScopeSentry) 直接同步资产数据，免去重复收集：
@@ -78,7 +104,7 @@
 ### 方式一：一键安装脚本（推荐）
 
 ```bash
-git clone https://github.com/mhtsec/ARTEX.git
+git clone https://github.com/iooxxh/ARTEX.git
 cd ARTEX
 ./install.sh
 ```
@@ -93,16 +119,14 @@ cd ARTEX
 ### 方式二：Docker Compose（手动）
 
 ```bash
-git clone https://github.com/mhtsec/ARTEX.git
+git clone https://github.com/iooxxh/ARTEX.git
 cd ARTEX
 cp .env.example .env          # 填 POSTGRES_PASSWORD、可选 ANTHROPIC_API_KEY
-docker compose up -d          # 拉取 mianhuatang11/artex 镜像 + postgres
+docker compose up -d          # 拉取镜像 + postgres
 # → http://localhost:8787
 ```
 
-> 原镜像源 `autumn27/artex` 已从 Docker Hub 删除，镜像现由本仓库自维护为 **`mianhuatang11/artex`**。  
-> 镜像源不可用（或想自行改代码）时，本地从纯源码构建即可：`docker compose build && docker compose up -d`。  
-> Dockerfile 为多阶段构建（前端静态导出 → Go 静态编译 → 运行镜像），默认走国内友好依赖源，可加 `--build-arg GOPROXY=... / --build-arg NPM_REGISTRY=...` 覆盖。正式镜像支持 `linux/amd64` 和 `linux/arm64`，Docker 会自动选择对应架构；固定版本可在 `.env` 设置 `ARTEX_TAG=v0.3.16`。
+> 注意：`docker-compose.yml` 默认拉取的公共镜像为上游快照，**不包含本 fork 的二改功能**。要使用二改功能请本地从源码构建：`docker compose build && docker compose up -d`（Dockerfile 为多阶段构建，前端静态导出 → Go 静态编译 → 运行镜像）。
 
 镜像已含常用工具（ripgrep/curl/vim/npm/nmap…）；`./skills` 与 `./data` 以绑定挂载持久化。
 
@@ -113,7 +137,7 @@ docker compose up -d          # 拉取 mianhuatang11/artex 镜像 + postgres
 
 ### 方式三：下载预编译二进制（Releases）
 
-到本仓库 [Releases](https://github.com/mhtsec/ARTEX/releases) 下载对应平台的 zip：解压后得到 `artex` + `start.sh`（Windows 为 `start.bat`）+ `skills/` + `config.example.json`：
+到本仓库 [Releases](https://github.com/iooxxh/ARTEX/releases) 下载对应平台的 zip（历史版本为上游备份，不含二改功能；**含二改功能的 Release 正在重新构建中**）：解压后得到 `artex` + `start.sh`（Windows 为 `start.bat`）+ `skills/` + `config.example.json`：
 
 ```bash
 cp config.example.json config.json   # 填好 database 连接
@@ -153,7 +177,7 @@ ARTEX_TARGETS=linux/amd64,windows/amd64 ./build.sh --release
 
 Docker 镜像随 Release 发布，使用同一份 `SHA256SUMS` 校验过的 Linux 二进制、启动脚本和 skills；两个架构分别在原生 runner 上完成 PostgreSQL、登录与配置持久化、内嵌网页、Chromium 和停止/重启检查，通过后才合并版本标签。`latest` 仅指向当前稳定 Release，补发历史版本不会将它回退。
 
-维护者需在仓库 Actions 配置变量 `DOCKERHUB_IMAGE=mianhuatang11/artex`，以及加密 Secrets `DOCKERHUB_USERNAME`、`DOCKERHUB_TOKEN`。正常推送版本 tag 会自动发布；仅补发 Docker 镜像时，在 Actions 中手工运行 `docker-release` 并填写已有 Release 标签。任一架构构建或验证失败都不会更新 `latest`，按日志修复后重跑。
+要发布带自己 Docker Hub 账号的镜像，需在仓库 Actions 配置变量 `DOCKERHUB_IMAGE=<你的镜像名>`，以及加密 Secrets `DOCKERHUB_USERNAME`、`DOCKERHUB_TOKEN`。正常推送版本 tag 会自动发布；仅补发 Docker 镜像时，在 Actions 中手工运行 `docker-release` 并填写已有 Release 标签。任一架构构建或验证失败都不会更新 `latest`，按日志修复后重跑。
 
 本地从源码构建可用 `--build-arg ARTEX_BUILD_VERSION=v0.3.16` 写入版本；默认 `dev`。Playwright 工具版本固定在 Dockerfile 中，浏览器默认从官方 CDN 下载，需要镜像站时可指定 `--build-arg PLAYWRIGHT_DOWNLOAD_HOST=...`。排查镜像时可执行 `python3 scripts/smoke-docker.py <镜像> <版本号>`，检查只使用临时数据库和内部网络，不读取本地 `.env` 或连接真实目标。
 
@@ -201,7 +225,7 @@ docker image prune -f          # 清理旧镜像（可选）
 
 ### 方式四：预编译二进制（Releases）
 
-到 [Releases](https://github.com/mhtsec/ARTEX/releases) 下载新版本 zip，停掉旧进程后覆盖 `artex` 与 `skills/`（保留你的 `config.json` 与 `data/`），重启即可：
+到 [Releases](https://github.com/iooxxh/ARTEX/releases) 下载新版本 zip，停掉旧进程后覆盖 `artex` 与 `skills/`（保留你的 `config.json` 与 `data/`），重启即可：
 
 ```bash
 cp -r <解压目录>/skills ./ && cp <解压目录>/artex ./
@@ -294,11 +318,6 @@ server {
 - 前端：`cd web && npm run dev`（`/api` 反代到后端，带热更新）
 - 测试：`go test ./...`
 - Mock 预览（无后端）：`cd web && NEXT_PUBLIC_MOCK=1 npm run dev`
-- 在线 Demo 重新部署（Cloudflare Pages，静态导出 + Mock 数据）：
-  ```bash
-  cd web && NEXT_PUBLIC_MOCK=1 npm run build:static
-  CLOUDFLARE_API_TOKEN=<token> npx wrangler pages deploy out --project-name=artex-demo --branch=main
-  ```
 
 ---
 
@@ -480,26 +499,6 @@ flowchart TB
 - [创新路线与版本规划](docs/创新路线/README.md)：M0—M4 实施顺序与六条能力方向；R05 作为公共基础，R02 优先，R03 先做可达性，R01/R06 随依据与复测推进，R04 后置。新增机制均为待实施设计。
 
 ---
-
-## 交流与社区
-
-本仓库后续由 **棉花糖** 持续维护，欢迎通过以下方式交流共建：
-
-- 🐛 **问题反馈 / 功能建议**：[提交 Issue](https://github.com/mhtsec/ARTEX/issues)
-- 🛠 **代码共建**：欢迎提交 [Pull Request](https://github.com/mhtsec/ARTEX/pulls)
-- 💬 **交流群**：扫码关注微信公众号 **棉花糖fans**，在**菜单栏点击「找棉花糖」**加好友，添加后发送 **「ARTEX」** 即可受邀进群
-
-<div align="center">
-
-<img src="screenshots/wx_mhtsec.png" alt="微信公众号 棉花糖fans" width="560" />
-
-</div>
-
----
-## 参考
-
-https://github.com/oritera/Cairn
-
 
 ## 许可与免责声明
 
