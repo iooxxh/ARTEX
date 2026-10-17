@@ -254,6 +254,9 @@ func New(ctx context.Context, m *Manager, skillDir string, dataDir string, keyDi
 	go s.reconcileConcurrency()
 	s.startTaskArchiveWorker()
 	s.wireInterceptReviewer() // LLM 兜底审批:未命中拦截规则的命令交给模型判定
+	// 出口审查:启动时向进程级共享 EgressGuard 注册平台敏感指纹
+	// (LLM key/jwt.key/PG 密码/用户自定义密钥),所有任务的 guard 即时生效。
+	s.registerEgressFingerprints()
 	return s
 }
 
